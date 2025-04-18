@@ -1,10 +1,10 @@
 // App.js
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Button } from 'react-native';
 import { getWeatherData } from './src/services/weatherService';
 import { shouldWater } from './src/utils/shouldWater';
-import { cities } from './src/data/cities';
+import cities from './src/data/cities.json';
 
 export default function App() {
   const [shouldWaterPlants, setShouldWaterPlants] = useState(null);
@@ -14,47 +14,68 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [decisionExplanation, setDecisionExplanation] = useState('');
 
+  const reloadCity = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    
+    try {
+      const randomCity = cities[Math.floor(Math.random() * cities.length)];
+      const { lat, lon, name } = randomCity;
+      setSelectedCity(name);
+
+      const data = await getWeatherData(lat, lon);
+
+      if (!data?.main || !data?.weather) {
+        console.error('Incomplete weather data.');
+        setErrorMessage('Unable to fetch complete weather data. Please try again later.');
+        return;
+      }
+
+      const { decision, reason } = shouldWater(data);
+
+      setWeatherDetails({
+        temp: data.main.temp,
+        humidity: data.main.humidity,
+        sky: data.weather[0].main,
+      });
+      setShouldWaterPlants(decision);
+      setDecisionExplanation(reason);
+
+    } catch (error) {
+      console.error(error);
+      setErrorMessage('Unable to fetch weather data. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     async function fetchWeather() {
+      setLoading(true);
+      setErrorMessage('');
+
       try {
         const randomCity = cities[Math.floor(Math.random() * cities.length)];
         const { lat, lon, name } = randomCity;
         setSelectedCity(name);
-  
+
         const data = await getWeatherData(lat, lon);
-  
+
         if (!data?.main || !data?.weather) {
           console.error('Incomplete weather data.');
           setErrorMessage('Unable to fetch complete weather data. Please try again later.');
-          setLoading(false);
           return;
         }
-  
-        const decision = shouldWater(data);
-  
+
+        const { decision, reason } = shouldWater(data);
+
         setWeatherDetails({
           temp: data.main.temp,
           humidity: data.main.humidity,
           sky: data.weather[0].main,
         });
-  
         setShouldWaterPlants(decision);
-
-        // Prepare friendly explanation
-        if (decision) {
-          if (data.main.temp > 25 && data.main.humidity < 50) {
-            setDecisionExplanation('It has been hot and dry recently, so watering is recommended.');
-          } else {
-            setDecisionExplanation('Recent conditions suggest your plants could use some extra water.');
-          }
-        } else {
-          if (data.main.humidity > 60 || data.weather[0].main === 'Rain') {
-            setDecisionExplanation('There was enough humidity or rain recently, so watering is not needed.');
-          } else {
-            setDecisionExplanation('Mild temperatures and normal humidity levels mean no extra watering needed.');
-          }
-        }
-
+        setDecisionExplanation(reason);
 
       } catch (error) {
         console.error(error);
@@ -101,6 +122,8 @@ export default function App() {
       <Text style={styles.reportText}>Current temperature: {weatherDetails.temp}°C</Text>
       <Text style={styles.reportText}>Current humidity: {weatherDetails.humidity}%</Text>
       <Text style={styles.reportText}>Sky conditions: {weatherDetails.sky}</Text>
+
+      <Button title="Reload City 🌎" onPress={reloadCity} />
     </ScrollView>
   );
 }
@@ -142,5 +165,11 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
     padding: 20,
+  },
+  subText: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
